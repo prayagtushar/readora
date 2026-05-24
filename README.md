@@ -16,7 +16,7 @@ PDF ─▶ parse (pdf-parse) ─▶ chunk (1000c / 200 overlap, recursive)
   user query ─▶ embed ─▶ query (top-K=5, score ≥ 0.5) ─▶ context
                                                               │
                                                               ▼
-                              streamText (Gemini 2.0 Flash) ─▶ UI
+                              streamText (Gemini 2.5 Flash) ─▶ UI
 ```
 
 Every stage is its own module under `lib/rag/` — chunking, embeddings, vectorstore, ingest, retrieval. Swapping the embedding model or the vector store is a one-file change.
