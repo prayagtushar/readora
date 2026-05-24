@@ -1,15 +1,10 @@
-import { auth } from '@clerk/nextjs/server';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
-import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { Chat, Message } from '@/lib/db/schema';
 import { retrieveContext, retrieveIntro } from '@/lib/rag/retrieval';
 
 const gemini = createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY! });
 const MODEL = 'gemini-2.5-flash';
-
 const SUMMARY_PATTERN = /summary|summarize|overview|what is.*(pdf|document)/i;
 
 const buildSystemPrompt = (context: string) => `
@@ -32,24 +27,11 @@ ${context}
 `.trim();
 
 export async function POST(req: Request) {
-	const { userId } = await auth();
-	if (!userId) {
-		return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-	}
-
-	const { messages, chatId } = await req.json();
-	if (!Array.isArray(messages) || !Number.isInteger(chatId)) {
+	const { messages, fileKey } = await req.json();
+	if (!Array.isArray(messages) || typeof fileKey !== 'string' || !fileKey) {
 		return NextResponse.json(
-			{ error: 'messages must be an array and chatId must be an integer' },
+			{ error: 'messages must be an array and fileKey must be a non-empty string' },
 			{ status: 400 }
-		);
-	}
-
-	const [chat] = await db.select().from(Chat).where(eq(Chat.id, chatId));
-	if (!chat || chat.userId !== userId) {
-		return NextResponse.json(
-			{ error: 'Chat not found or access denied' },
-			{ status: 404 }
 		);
 	}
 
@@ -66,8 +48,8 @@ export async function POST(req: Request) {
 	}
 
 	const context = SUMMARY_PATTERN.test(lastMessage.content)
-		? await retrieveIntro(chat.fileKey)
-		: await retrieveContext(lastMessage.content, chat.fileKey);
+		? await retrieveIntro(fileKey)
+		: await retrieveContext(lastMessage.content, fileKey);
 
 	try {
 		const result = streamText({
@@ -77,21 +59,10 @@ export async function POST(req: Request) {
 				role: m.role as 'user' | 'assistant',
 				content: m.content,
 			})),
-			onFinish: async (event) => {
-				try {
-					await db.insert(Message).values([
-						{ chatId, content: lastMessage.content, role: 'user' },
-						{ chatId, content: event.text, role: 'assistant' },
-					]);
-				} catch (dbErr) {
-					console.error('Failed to persist messages:', dbErr);
-				}
-			},
 		});
-
 		return result.toDataStreamResponse();
 	} catch (error) {
-		console.error('Chat error:', error);
+		console.error('Demo chat error:', error);
 		const msg = error instanceof Error ? error.message : 'Server error';
 		const status = msg.toLowerCase().includes('rate limit') ? 429 : 500;
 		return NextResponse.json({ error: msg }, { status });

@@ -1,204 +1,84 @@
-# ⚡️ OpsVerseAI — Intelligent PDF Chat Revolution
+# Readora
 
-<p align="center">
-  <img src="./public/images/HomePage.png" alt="OpsVerseAI Banner" />
-</p>
-<p align="center"><em>Transform static PDFs into dynamic, AI-powered conversations. Upload, ask, and unlock insights effortlessly.</em></p>
+A retrieval-augmented chat interface for PDF documents. Upload a file and ask grounded, citation-style questions. This README documents the retrieval pipeline and the design choices behind it.
 
-<a id="quick-overview"></a>
+## Pipeline
 
-## 🌟 Quick Overview
+```
+PDF ─▶ parse (pdf-parse) ─▶ chunk (1000c / 200 overlap, recursive)
+                              │
+                              ▼
+                       embed (Gemini gemini-embedding-001, 768-d)
+                              │
+                              ▼
+                  upsert ─▶ Pinecone (one namespace per file)
+                              │
+  user query ─▶ embed ─▶ query (top-K=5, score ≥ 0.5) ─▶ context
+                                                              │
+                                                              ▼
+                              streamText (Gemini 2.0 Flash) ─▶ UI
+```
 
-OpsVerseAI is an innovative Next.js-based application that redefines document interaction. Upload any PDF—be it textbooks, research papers, or reports—and engage in natural, context-aware conversations powered by advanced AI (Gemini API) and vector search (Pinecone). With secure authentication (Clerk), premium subscriptions (Stripe), and a responsive UI (Tailwind CSS), it’s built for efficiency and scalability.
+Every stage is its own module under `lib/rag/` — chunking, embeddings, vectorstore, ingest, retrieval. Swapping the embedding model or the vector store is a one-file change.
 
-**[Live Demo](#live-demo) | [GitHub Repository](#repository) | [Documentation](#documentation)**
+## Architecture
 
-[![GitHub Stars](https://img.shields.io/github/stars/Prayag-09/OpsVerseAI?style=social)](https://github.com/Prayag-09/OpsVerseAI)  
-[![GitHub Issues](https://img.shields.io/github/issues/Prayag-09/OpsVerseAI)](https://github.com/Prayag-09/OpsVerseAI/issues)  
-[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)  
-[![Last Commit](https://img.shields.io/github/last-commit/Prayag-09/OpsVerseAI)](https://github.com/Prayag-09/OpsVerseAI/commits/main)
+```
+app/
+  api/
+    upload/         Vercel Blob handle-upload endpoint (signed client uploads)
+    create-chat/    Ingests the uploaded PDF and creates a chat row
+    chat/           Streaming chat endpoint (retrieves context, calls LLM)
+    get-messages/   Loads persisted message history
+  chat/[chatId]/    Two-pane chat UI (PDF viewer + chat)
+  page.tsx          Landing & upload
 
----
+lib/
+  rag/              embeddings · chunking · vectorstore · ingest · retrieval
+  storage/          Vercel Blob download helper
+  db/               Drizzle schema + Neon Postgres client
+  utils.ts
 
-## 📑 Table of Contents
+components/
+  buttons/          Client-side upload widget
+  layouts/          Sidebar, chat, PDF viewer
+  ui/               Radix primitives
+```
 
-- [🌟 Quick Overview](#quick-overview)
-- [🚀 Features](#features)
-- [🛠 Tech Stack](#tech-stack)
-- [📦 Installation](#installation)
-- [🎮 Usage](#usage)
-- [⚙️ Configuration](#configuration)
-- [🤝 Contributing](#contributing)
-- [📬 Contact](#contact)
-- [📊 Screenshots](#screenshots)
+## Stack
 
----
+| Layer        | Choice                                  |
+| ------------ | --------------------------------------- |
+| Embedder     | Google `gemini-embedding-001` (768-d, asymmetric task types) |
+| Vector store | Pinecone (file-key namespaces)          |
+| LLM          | `gemini-2.5-flash` (streaming)          |
+| Chunker      | RecursiveCharacterTextSplitter (1000/200) |
+| Storage      | Vercel Blob (client uploads, 10MB cap)  |
+| Database     | Neon Postgres + Drizzle ORM             |
+| Auth         | Clerk                                   |
+| Framework    | Next.js 15 (App Router) + Bun           |
 
-<a id="features"></a>
-
-## 🚀 Features
-
-- **AI-Powered PDF Chat**: Upload PDFs and query with natural language (e.g., “Summarize Chapter 3” or “Explain Figure 2”).
-- **Secure Authentication**: Robust sign-in/sign-up via Clerk with session management.
-- **Premium Subscriptions**: Stripe-integrated upgrades with real-time webhook updates.
-- **Chat History**: Save and resume conversations seamlessly.
-- **Mobile-First Design**: Fully responsive UI optimized for all devices.
-- **Vector-Based Search**: Pinecone-powered chunk retrieval for precise, context-aware responses.
-- **Cloud Storage**: AWS S3 for secure PDF uploads.
-- **Error Resilience**: Advanced handling for subscription and API edge cases.
-
----
-
-<a id="tech-stack"></a>
-
-## 🛠 Tech Stack
-
-| **Category**       | **Technologies**                           |
-| ------------------ | ------------------------------------------ |
-| **Frontend**       | Next.js, React, Tailwind CSS               |
-| **Backend**        | Node.js, Gemini API                        |
-| **Infrastructure** | PostgreSQL (Drizzle ORM), Pinecone, AWS S3 |
-| **Payments**       | Stripe                                     |
-| **Authentication** | Clerk                                      |
-| **Language**       | TypeScript                                 |
-
----
-
-<a id="installation"></a>
-
-## 📦 Installation
-
-Get OpsVerseAI running locally with these steps:
-
-### 1. Clone the Repository
+## Local development
 
 ```bash
-git clone https://github.com/Prayag-09/OpsVerseAI.git
-cd OpsVerseAI
+bun install
+cp .env.example .env
+# fill in the env vars
+bun run db:push      # apply schema to Neon
+bun run dev          # http://localhost:3000
 ```
 
-### 2. Install Dependencies
+## Known limitations
 
-```bash
-npm install
-```
+- Text-only PDF parsing. Tables and figures are flattened to whitespace.
+- No reranker — raw cosine similarity decides top-K.
+- No retrieval evaluation harness yet (Recall@K / MRR / Faithfulness). On the roadmap.
+- Pure vector search; no hybrid (BM25 + dense) fallback for queries with rare tokens.
 
-### 3. Configure Environment Variables
+## Roadmap
 
-Create a `.env.local` file in the root directory and populate it with:
-
-```plaintext
-# Database
-NEXT_PUBLIC_DATABASE_URL=your_postgres_connection_string
-
-# Clerk
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_publishable_key
-CLERK_SECRET_KEY=your_secret_key
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-
-# AWS S3
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_REGION=your_region
-AWS_BUCKET_NAME=your_bucket_name
-
-# Pinecone
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_INDEX_NAME=your_pinecone_index_name
-
-# Gemini API
-GEMINI_API_KEY=your_gemini_api_key
-
-# Stripe
-STRIPE_API_KEY=your_stripe_api_key
-STRIPE_WEBHOOK_SIGNING_SECRET=your_webhook_secret
-```
-
-- **Clerk**: Retrieve keys from [Clerk Dashboard](https://dashboard.clerk.com/).
-- **Stripe**: Obtain from [Stripe Dashboard](https://dashboard.stripe.com/).
-- **AWS**: Configure via [AWS Management Console](https://aws.amazon.com/).
-- **Pinecone**: Sign up at [Pinecone.io](https://www.pinecone.io/) for an API key.
-- **Gemini**: Get your key from [Google AI Studio](https://aistudio.google.com/).
-
-### 4. Set Up Database
-
-- Install PostgreSQL locally or use a cloud provider (e.g., Supabase).
-- Initialize the schema with Drizzle:
-  ```bash
-  npx drizzle-kit generate
-  npx drizzle-kit push
-  ```
-
-### 5. Run the Application
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
----
-
-<a id="usage"></a>
-
-## 🎮 Usage
-
-1. **Sign In**: Authenticate using Clerk.
-2. **Upload PDFs**: Available for Premium users (upload via the home page).
-3. **Interact**: Ask questions or request summaries (e.g., “What’s the main point?”).
-4. **Upgrade**: Subscribe via Stripe for full access.
-5. **Resume**: Access saved chats from the homepage.
-
-### Testing Premium
-
-- **Card Number**: `4242 4242 4242 4242`
-- **Expiry Date**: Any future date
-- **CVC / ZIP**: Any valid number
-
----
-
-<a id="configuration"></a>
-
-## ⚙️ Configuration
-
-- **Stripe Webhook**: Register `/api/webhook` in [Stripe Dashboard](https://dashboard.stripe.com/webhooks) to handle subscription events.
-- **Clerk Setup**: Configure sign-in/sign-up URLs and fallback routes in [Clerk Dashboard](https://dashboard.clerk.com/).
-- **Pinecone Index**: Create an index in [Pinecone Console](https://app.pinecone.io/) and set the `PINECONE_INDEX_NAME`.
-- **AWS S3**: Set up a bucket and IAM user with `s3:PutObject` permissions.
-
----
-
-<a id="contributing"></a>
-
-## 🤝 Contributing
-
-We ❤️ contributions! Here’s how to get involved:
-
-1. **Fork the Repository**: Create your own copy on GitHub.
-2. **Create a Branch**: `git checkout -b feature/your-feature`.
-3. **Make Changes**: Follow TypeScript/ESLint conventions.
-4. **Test Locally**: Run `npm run dev` and verify functionality.
-5. **Submit a PR**: Include a clear description and update documentation.
-6. **Review**: Address feedback and iterate.
-
-<a id="contact"></a>
-
-## 📬 Contact
-
-- **Email**: [prayagtushar2016@gmail.com](mailto:prayagtushar2016@gmail.com)
-- **LinkedIn**: [linkedin.com/in/prayagtushar](https://www.linkedin.com/in/prayagtushar)
-- **GitHub**: [github.com/Prayag-09](https://github.com/Prayag-09)
-
-<a id="screenshots"></a>
-
-## 📊 Screenshots
-
-![Home Page](./public/images/HomePage.png)  
-![Chat Interface](./public/images/ChatInterface.png)  
-![Payment Gateway](./public/images/PaymentPage.png)
-
----
-
-_Last Updated: April 11, 2025_  
-_Built with ❤️ by Tushar Prayag_
+1. Eval harness with a labeled QA set; publish Recall@K, MRR, and LLM-judged faithfulness.
+2. Cross-encoder reranker between Pinecone top-25 → final top-5.
+3. Swap Pinecone for `pgvector` on Neon (collapse two services into one).
+4. Hybrid search via Postgres `tsvector` + RRF fusion.
+5. Query rewriting / HyDE for short queries.

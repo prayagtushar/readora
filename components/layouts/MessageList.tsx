@@ -38,7 +38,7 @@ const MessageList = ({ messages, isLoading }: Props) => {
 						)}>
 						<ReactMarkdown
 							components={{
-								p: ({ node, ...props }) => (
+								p: ({ ...props }) => (
 									<p
 										{...props}
 										className='prose prose-invert text-sm max-w-none whitespace-pre-wrap'

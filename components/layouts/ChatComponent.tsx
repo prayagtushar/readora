@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { useChat } from '@ai-sdk/react';
+import { useChat, type Message as UiMessage } from '@ai-sdk/react';
 import { Send } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,7 +10,7 @@ import MessageList from './MessageList';
 import { UserButton } from '@clerk/nextjs';
 
 type Message = {
-	id: string;
+	id: number;
 	content: string;
 	role: 'user' | 'assistant';
 	createdAt: string;
@@ -41,7 +41,11 @@ export default function ChatComponent({ chatId }: Props) {
 	} = useChat({
 		api: '/api/chat',
 		id: chatId.toString(),
-		initialMessages: initialMessages as any,
+		initialMessages: (initialMessages ?? []).map<UiMessage>((m) => ({
+			id: String(m.id),
+			role: m.role,
+			content: m.content,
+		})),
 		body: { chatId },
 		onError: (error) => console.error('Chat error:', error),
 	});

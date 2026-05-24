@@ -1,42 +1,28 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import './globals.css';
 import { ClerkProvider } from '@clerk/nextjs';
 import { neobrutalism } from '@clerk/themes';
-import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import { Toaster } from 'sonner';
 
-const geistSans = Geist({
-	variable: '--font-geist-sans',
-	subsets: ['latin'],
-});
+import './globals.css';
+import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 
-const geistMono = Geist_Mono({
-	variable: '--font-geist-mono',
-	subsets: ['latin'],
-});
+const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
+const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-	title: 'OpsVerseAI: Decoding Your Docs',
+	title: 'Readora — RAG for your PDFs',
 	description:
-		'OpsVerseAI is an intelligent PDF chat application that empowers you to interact with your documents effortlessly. Decode your PDFs, extract insights, and get answers to your questions with ease',
+		'Readora is a retrieval-augmented chat interface for PDF documents. Upload a file and ask grounded, citation-style questions.',
 };
 
 export default function RootLayout({
 	children,
-}: Readonly<{
-	children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
 	return (
-		<ClerkProvider
-			appearance={{
-				baseTheme: [neobrutalism],
-			}}>
+		<ClerkProvider appearance={{ baseTheme: [neobrutalism] }}>
 			<ReactQueryProvider>
-				<html
-					lang='en'
-					className='h-full scroll-smooth'
-					suppressHydrationWarning>
+				<html lang='en' className='h-full scroll-smooth' suppressHydrationWarning>
 					<body
 						className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-black`}>
 						<div className='relative min-h-screen bg-gradient-to-br from-black via-gray-900 to-black overflow-hidden'>
