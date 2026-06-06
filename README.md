@@ -2,6 +2,23 @@
 
 A retrieval-augmented chat interface for PDF documents. Upload a file and ask grounded, citation-style questions. This README documents the retrieval pipeline and the design choices behind it.
 
+**Live:** https://readora.prayagtushar.xyz/
+
+## Highlights
+
+- Citation-style RAG over PDFs: parse → chunk → embed → retrieve → stream grounded answers, with a hallucination-resistant system prompt.
+- Recursive chunking at 1,000 chars / 200 overlap.
+- Google `gemini-embedding-001` embeddings (768-d) using **asymmetric task types** (`RETRIEVAL_DOCUMENT` vs `RETRIEVAL_QUERY`) for better query–chunk alignment.
+- Pinecone vector store with **per-file namespacing** + MD5 chunk dedup; top-K=5, score threshold ≥ 0.5, 3,000-char context cap.
+- Answers streamed from `gemini-2.5-flash`; Clerk auth; Drizzle ORM + Neon Postgres; client-side uploads via Vercel Blob (10 MB limit).
+- Two modes: zero-signup demo (one PDF/browser, history in localStorage) + authenticated flow.
+
+## Demo
+
+> _Demo GIF/screenshot coming soon._ Try it live at https://readora.prayagtushar.xyz/
+
+<!-- TODO: add screenshot at docs/screenshot.png and embed here -->
+
 ## Pipeline
 
 ```
